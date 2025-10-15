@@ -1,0 +1,753 @@
+---
+title: "Analysis"
+output:
+  html_document: default
+  pdf_document: default
+date: "2025-06-25"
+authors: "Amanda Merino-Pelaz, Lucía Cobo-Sánchez"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data
+
+To open the data select file named dataset.
+
+```{r data, , echo=FALSE}
+library(FactoMineR)
+library(factoextra)
+
+x <- read.csv(file.choose(),header=T,sep=";") # dataset.csv
+print(x)
+```
+
+#### Extract spatial parameters
+
+```{r parameters, echo=FALSE}
+params <- x[, c("Kappa","Scale","Clust_strength","Sibl_prob")]
+print(params)
+labels<-x[,1]
+rownames(params)<-labels
+```
+
+## Dimensionality reduction: Principal Component Analysis (PCA)
+
+Firstly, Bartlett's test of Sphericity and the Kaiser-Meyer-Olkin factor adequacy (KMO) were performed to assess the quality of the analyses.
+
+#### Barlett test:
+```{r barlett, echo=FALSE}
+library("psych")
+cortest.bartlett(params)#p.value <0.05
+```
+
+#### KMO test:
+```{r kmo, echo=FALSE}
+KMO(params)#Overall MSA >70
+```
+
+#### PCA individual points (Figure 2a)
+Individuals plot, colored by the quality of representation (cos²), with warmer colors indicating better representation in the component space.
+```{r individuals, echo=FALSE}
+res.pca <- PCA(params, scale.unit = TRUE, ncp = 5, graph = FALSE)
+fviz_pca_ind(res.pca,
+             col.ind = "cos2", # colored by quality of representation 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     
+)
+```
+
+#### PCA variables (Figure 2b): 
+Variables plot, colored by their contribution to the principal components, highlighting which metrics explain most of the variability in the dataset.
+```{r PCAvariables, echo=FALSE}
+fviz_pca_var(res.pca,
+             col.var = "contrib", # colored by contribution
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE      
+)
+```
+
+The PCA scores are then stored in the table under the name of scores_dim1 (PC1) and scores_dim2 (PC2).
+
+```{r PCAscores, echo=FALSE}
+ind_scores <- get_pca_ind(res.pca)
+
+scores_dim1 <- ind_scores$coord[, 1]
+scores_dim2 <- ind_scores$coord[, 2]
+
+x$PC1 <- scores_dim1
+x$PC2 <- scores_dim2
+```
+
+Finally, several PCA overlays are plotted. The potential associations observed with numeric variables are checked.
+
+#### Figure 3a
+Gradient-colored by chronological age (binned).
+
+```{r PCAoverlay1, echo=FALSE}
+library(ggplot2)
+library(ggrepel)
+my_palette <- colorRampPalette(c("darkblue","blue", "purple", "deeppink","orange", "yellow","green"))(100)
+
+ggplot(x, aes(x = PC1, y = PC2, color = Chronology_ka)) +
+  geom_point(size = 3) +
+  geom_text_repel(aes(label = Site), size = 3, max.overlaps = 20) +
+  scale_color_gradientn(colors = my_palette,
+                        name = "Chronology (ka)",
+                        breaks = seq(20, 120, by = 20)) +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = "PC1 (dispersion ↔ compactness)",
+    y = "PC2 (cluster scale)"
+  )
+print("Spearman correlation between chronology and PC1 within UP:")
+up <- subset(x, Period == "UP")
+cor_up <- cor.test(up$Chronology, up$PC1, method = "spearman")
+print(cor_up)
+
+print("Spearman correlation between chronology and PC1 within MP:")
+mp <- subset(x, Period == "MP")
+cor_mp <- cor.test(mp$Chronology, mp$PC1, method = "spearman")
+cor_mp
+```
+
+#### Figure 3b
+Gradient-colored by mean intensity (m2).
+```{r PCAoverlay2, echo=FALSE}
+my_palette <- colorRampPalette(c("darkblue","blue", "purple", "deeppink","orange", "yellow","green"))(100)
+
+ggplot(x, aes(x = PC1, y = PC2, color = Mean_intensity_m2)) +
+  geom_point(size = 3) +
+  geom_text_repel(aes(label = Site), size = 3, max.overlaps = 20) +
+  scale_color_gradientn(colors = my_palette,
+                        name = "Mean intensity",
+                        breaks = seq(10, 500, by = 50)) +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = "PC1 (dispersion ↔ compactness)",
+    y = "PC2 (cluster scale)"
+  )
+
+print("Spearman correlation between mean intensity and PC1:")
+cor.test(x$PC1, x$Mean_intensity_m2, method = "spearman")
+
+print("Spearman correlation between mean intensity and kappa:")
+cor.test(x$Kappa, x$Mean_intensity_m2, method = "spearman")
+
+print("Spearman correlation between mean intensity and sibling probability:")
+cor.test(x$Sibl_prob, x$Mean_intensity_m2, method = "spearman")
+
+print("Spearman correlation between mean intensity and cluster strength:")
+cor.test(x$Clust_strength, x$Mean_intensity_m2, method = "spearman")
+
+print("Spearman correlation between mean intensity and scale:")
+cor.test(x$Scale, x$Mean_intensity_m2, method = "spearman")
+
+```
+
+
+#### Figure 3c
+Colored by period (Middle Paleolithic, Upper Paleolithic) and shaped by site context (open-air, cave). Ellipses represent 95% confidence for each group OA-MP, OA-UP, C-MP, C-UP.
+```{r PCAoverlay3, echo=FALSE}
+ggplot(x, aes(x = PC1, y = PC2, color = Period, shape = Site_context)) +
+  geom_point(size = 3) +
+  stat_ellipse(level = 0.95, linetype = "dashed") +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = "PC1 (dispersion ↔ compactness)",
+    y = "PC2 (Cluster Scale)",
+    color = "Period",
+    shape = "Site context"
+  )
+
+```
+
+
+#### Figure 3d 
+Colored by sub-period and shaped by site context (open-air, cave). Ellipses represent 95% confidence for periods MP and UP.
+```{r PCAoverlay4, echo=FALSE}
+ggplot(x, aes(x = PC1, y = PC2, color = Period2, shape = Site_context)) +
+  geom_point(size = 3) +
+  stat_ellipse(aes(group = Period, linetype = Period), level = 0.95, show.legend = FALSE) +
+  scale_color_brewer(palette = "Set2") +
+  scale_shape_manual(values = c(16, 17)) +
+  theme_minimal(base_size = 14) +
+  labs(
+    x      = "PC1 (dispersion ↔ compactness)",
+    y      = "PC2 (cluster scale)",
+    color  = "Sub-period",
+    shape  = "Site context"
+  )
+```
+
+#### Figure 3e
+Colored by functionality of site (residential and non-residential) and shaped by length of occupation (short-term, long-term). Ellipses represent 95% confidence for residential and non-residential groups.  
+```{r PCAoverlay5, echo=FALSE}
+ggplot(x, aes(x = PC1, y = PC2, color = Functionality_bi, shape = Duration)) +
+  geom_point(size = 3) +
+  stat_ellipse(aes(group = Functionality_bi, linetype = Functionality_bi), level = 0.95, show.legend = FALSE) +
+  scale_color_brewer(palette = "Set2") +
+  scale_shape_manual(values = c(16, 17)) +
+  theme_minimal(base_size = 14) +
+  labs(
+    x      = "PC1 (dispersion ↔ compactness)",
+    y      = "PC2 (cluster scale)",
+    color  = "Functionality",
+    shape  = "Length of occupation"
+  )
+```
+
+
+## Variable screening and transformations
+
+Prior to the regressions, the distribution of  numeric and categorical variables (functionality, duration, site context, period, chronology, number of hearths, area, and mean intensity) were explored by means of histograms, Q-Q plots, Shapiro-Wilk test, and pairwise correlations (Pearson/Spearman correlations, variance inflation factors). Detailed results of this process are in the suplementary of materials sections IV (categorical) and V (numeric).
+
+### Period
+
+#### SOM section IV Figure 2a 
+Violin, box and jitter plots showing the distribution of PC1 scores grouped by period (Middle Paleolithic vs. Upper Paleolithic).
+```{r periodfig, echo=FALSE}
+ggplot(x, aes(x = Period, y = PC1, fill = Period)) +
+  # 1) Violin para la densidad
+  geom_violin(trim = FALSE, alpha = 0.5) +
+  # 2) Boxplot encima, estrecho para no tapar el violín
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.8) +
+  # 3) Jitter de puntos individuales
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7) +
+  # Estética
+  scale_fill_brewer(palette = "Pastel1") +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = "Period",
+    y = "PC1 (dispersion ↔ compactness)"
+  ) +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(size = 12),
+    axis.title = element_text(size = 13)
+  )
+```
+
+#### Descriptive statistics and tests:
+
+```{r periodstats, echo=FALSE}
+print("Descriptive statistics:")
+library(rstatix)
+library(dplyr)
+x %>% group_by(Period) %>%
+  summarise(
+    n = n(),
+    mean = mean(PC1),
+    sd   = sd(PC1),
+    median = median(PC1),
+    IQR = IQR(PC1)
+  )
+
+print("Welch two‐sample t-test:")
+t.test(PC1 ~ Period, data=x, var.equal=FALSE)
+
+print("Cohen's d:")
+cohen.d(PC1 ~ Period, data = x)
+
+print("Bootstrap CI of the difference between means:")
+
+library(boot)
+set.seed(123)
+boot_diff <- function(data, i) {
+  d <- data[i, ]
+  mean(d$PC1[d$Period=="UP"]) - mean(d$PC1[d$Period=="MP"])
+}
+b <- boot(x, boot_diff, R = 2000)
+boot.ci(b, type = "perc")
+ 
+print("Shapiro test applied to each group:")
+
+mp <- filter(x, Period=="MP")
+up <- filter(x, Period=="UP")
+
+print("MP:")
+shapiro_mp <- shapiro.test(mp$PC1)
+shapiro_mp
+
+print("UP:")
+shapiro_up <- shapiro.test(up$PC1)
+shapiro_up
+
+print("Wilcoxon rank-sum test:")
+wilcox.test(PC1 ~ Period, data=x)
+```
+
+
+### Site context
+
+#### SOM section IV Figure 2b
+Violin, box and jitter plots showing the distribution of PC1 scores grouped by site context (open-air vs. cave).
+```{r contextfig, echo=FALSE}
+
+ggplot(x, aes(x = Site_context, y = PC1, fill = Site_context)) +
+  # 1) Violin para la densidad
+  geom_violin(trim = FALSE, alpha = 0.5) +
+  # 2) Boxplot encima, estrecho para no tapar el violín
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.8) +
+  # 3) Jitter de puntos individuales
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7) +
+  # Estética
+  scale_fill_brewer(palette = "Pastel1") +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = "Site Context",
+    y = "PC1 (dispersion ↔ compactness)"
+  ) +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(size = 12),
+    axis.title = element_text(size = 13)
+  )
+```
+
+#### Descriptive statistics and tests:
+
+```{r contextstats, echo=FALSE}
+print("Descriptive statistics:")
+x %>% group_by(Site_context) %>%
+  summarise(
+    n = n(),
+    mean = mean(PC1),
+    sd   = sd(PC1),
+    median = median(PC1),
+    IQR = IQR(PC1)
+  )
+
+print("Levene's test:")
+car::leveneTest(PC1 ~ Site_context, data=x)
+  
+print("Welch two‐sample t-test:")
+t.test(PC1 ~ Site_context, data=x, var.equal=FALSE)
+
+print("Wilcoxon rank-sum test:")
+wilcox.test(PC1 ~ Site_context, data=x)
+```
+
+
+### Functionality
+
+#### SOM section IV Figure 2c 
+Violin, box and jitter plots showing the distribution of PC1 scores grouped by site functionality (residential vs. non-residential).
+```{r functfig, echo=FALSE}
+
+ggplot(x, aes(x = Functionality_bi, y = PC1, fill = Functionality_bi)) +
+  # 1) Violin para la densidad
+  geom_violin(trim = FALSE, alpha = 0.5) +
+  # 2) Boxplot encima, estrecho para no tapar el violín
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.8) +
+  # 3) Jitter de puntos individuales
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7) +
+  # Estética
+  scale_fill_brewer(palette = "Pastel1") +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = "Functionality",
+    y = "PC1 (dispersion ↔ compactness)"
+  ) +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(size = 12),
+    axis.title = element_text(size = 13)
+  )
+```
+
+#### Descriptive statistics and tests:
+
+```{r functstats, echo=FALSE}
+print("Descriptive statistics:")
+x %>% group_by(Functionality_bi) %>%
+  summarise(
+    n = n(),
+    mean = mean(PC1),
+    sd   = sd(PC1),
+    median = median(PC1),
+    IQR = IQR(PC1)
+  )
+
+print("Levene's test:")
+car::leveneTest(PC1 ~ Functionality_bi, data=x)
+  
+print("Welch two‐sample t-test:")
+t.test(PC1 ~ Functionality_bi, data=x, var.equal=FALSE)
+
+print("Wilcoxon rank-sum test:")
+wilcox.test(PC1 ~ Functionality_bi, data=x)
+```
+
+### Chronology
+#### SOM section V Figure 3a 
+Density histogram of chronology in which the y-axis represents probability density, blue line represents kernel density estimates to visualize the underlying distribution of the data
+```{r chronfig1, echo=FALSE}
+ggplot(x, aes(x = Chronology_ka)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 10, color = "black", fill = "white") +
+  geom_density(color = "blue", size = 1) +
+  labs(
+       x = "Chronology",
+       y = "Density") +
+  theme_minimal()
+```
+
+#### SOM section V Figure 4a
+Q–Q plot of chronology comparing the distribution of the data with a theoretical normal distribution.
+```{r chrontfig2, echo=FALSE}
+ggplot(x, aes(sample = Chronology_ka)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "Chronology") +
+  theme_minimal()
+```
+
+#### Shapiro-Wilk test for normality:
+```{r chronstats, echo=FALSE}
+shapiro.test(x$Chronology_ka)
+```
+
+
+### Number of hearths
+#### SOM section V Figure 3b
+Density histogram of hearths count in which the y-axis represents probability density, blue line represents kernel density estimates to visualize the underlying distribution of the data
+```{r hearthsfig1, echo=FALSE}
+ggplot(x, aes(x = Num_hearths)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 10, color = "black", fill = "white") +
+  geom_density(color = "blue", size = 1) +
+  labs(
+       x = "Number of hearths",
+       y = "Density") +
+  theme_minimal()
+```
+
+#### SOM section V Figure 4b 
+Q–Q plot of hearths count comparing the distribution of the data with a theoretical normal distribution.
+```{r hearthsfig2, echo=FALSE}
+ggplot(x, aes(sample = Num_hearths)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "Number of Hearths") +
+  theme_minimal()
+```
+
+#### Shapiro-Wilk test for normality:
+```{r hearthsstats1, echo=FALSE}
+shapiro.test(x$Num_hearths)
+```
+
+#### Correlation tests with clustering metrics:
+```{r hearthsstats2, echo=FALSE}
+cor.test(x$Kappa, x$Num_hearths, method = "spearman")
+cor.test(x$Sibl_prob, x$Num_hearths, method = "spearman")
+cor.test(x$Clust_strength, x$Num_hearths, method = "spearman")
+cor.test(x$Scale, x$Num_hearths, method = "spearman")
+```
+
+Log transformation of number of hearths.
+```{r periodstats3, echo=FALSE}
+x <- x%>%mutate(log_hearths = log(Num_hearths + 1))
+```
+
+
+### Excavated area
+#### SOM section V Figure 3c 
+Density histogram of area in which the y-axis represents probability density, blue line represents kernel density estimates to visualize the underlying distribution of the data
+```{r areafig1, echo=FALSE}
+ggplot(x, aes(x = Excavated_area_m2)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 10, color = "black", fill = "white") +
+  geom_density(color = "blue", size = 1) +
+  labs(
+       x = "Area",
+       y = "Density") +
+  theme_minimal()
+```
+
+#### SOM section V Figure 4c
+Q–Q plot of area comparing the distribution of the data with a theoretical normal distribution.
+```{r areafig2, echo=FALSE}
+ggplot(x, aes(sample = Excavated_area_m2)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "Area") +
+  theme_minimal()
+```
+
+#### Shapiro-Wilk test for normality:
+```{r areastats1, echo=FALSE}
+shapiro.test(x$Excavated_area_m2)
+```
+
+#### Correlation tests with clustering metrics:
+```{r areastats2, echo=FALSE}
+cor.test(x$Kappa, x$Excavated_area_m2, method = "spearman")
+cor.test(x$Sibl_prob, x$Excavated_area_m2, method = "spearman")
+cor.test(x$Clust_strength, x$Excavated_area_m2, method = "spearman")
+cor.test(x$Scale, x$Excavated_area_m2, method = "spearman")
+```
+
+#### Variation of area among periods;
+```{r areastats3, echo=FALSE}
+print("Levene's test:")
+car::leveneTest(Excavated_area_m2 ~ Period, data=x)
+
+print("Levene's test in open-air sites:")
+x_open <- subset(x, Site_context == "OA")
+car::leveneTest(Excavated_area_m2 ~ Period, data = x_open)
+
+print("Levene's test in cave sites:")
+x_cave <- subset(x, Site_context == "C")
+car::leveneTest(Excavated_area_m2 ~ Period, data = x_cave)
+```
+
+
+### Mean intensity
+#### SOM section V Figure 3d
+Density histogram of mean intensity in which the y-axis represents probability density, blue line represents kernel density estimates to visualize the underlying distribution of the data
+```{r intfig1, echo=FALSE}
+ggplot(x, aes(x = Mean_intensity_m2)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 10, color = "black", fill = "white") +
+  geom_density(color = "blue", size = 1) +
+  labs(
+       x = "Mean intensity",
+       y = "Density") +
+  theme_minimal()
+```
+
+#### SOM section V Figure 4d
+Q–Q plot of mean intensity comparing the distribution of the data with a theoretical normal distribution.
+```{r intfig2, echo=FALSE}
+ggplot(x, aes(sample = Mean_intensity_m2)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "Mean intensity") +
+  theme_minimal()
+```
+
+#### Shapiro-Wilk test for normality:
+```{r intstats1, echo=FALSE}
+shapiro.test(x$Mean_intensity_m2)
+```
+
+#### Correlation tests with clustering metrics:
+```{r intstats2, echo=FALSE}
+cor.test(x$Kappa, x$Mean_intensity_m2, method = "spearman")
+cor.test(x$Sibl_prob, x$Mean_intensity_m2, method = "spearman")
+cor.test(x$Clust_strength, x$Mean_intensity_m2, method = "spearman")
+cor.test(x$Scale, x$Mean_intensity_m2, method = "spearman")
+```
+
+## Regression models
+
+Models were fitted with variables period, context, functionality, and number of hearths.
+
+### Models with PC1
+
+#### Full OLS model (Model 1, n=22):
+```{r model1, echo=FALSE}
+m_PC1 <- lm(PC1 ~ Period + Site_context + log_hearths + Functionality_bi, data = x)
+summary(m_PC1)
+```
+##### Model validation
+```{r modelval1, echo=FALSE}
+print("1. Normality of residuals:")
+qqnorm(residuals(m_PC1)); qqline(residuals(m_PC1))
+shapiro.test(residuals(m_PC1))
+
+print("2. Homocedasticity:")
+plot(fitted(m_PC1), residuals(m_PC1))
+abline(h=0, lty=2)
+#Test de Breusch–Pagan:
+library(lmtest)
+bptest(m_PC1)
+
+print("3. Independency of residuals:")
+dwtest(m_PC1)
+
+print("4. Influence/leverage. Cook's disance:")
+plot(cooks.distance(m_PC1), type="h")
+which(cooks.distance(m_PC1) > 4/(nrow(x)-length(coef(m_PC1))))#Señala los casos influyentes.
+hatvalues(m_PC1)[19]
+```
+
+#### Full OLS model without El Salt (Model 2, n=21):
+```{r model2, echo=FALSE}
+m_PC1_nolim <- lm(PC1 ~ Period + Site_context + log_hearths + Functionality_bi,data = x[-19, ])
+summary(m_PC1_nolim)
+
+print("AIC Model 1 vs Model 2:")
+AIC(m_PC1,m_PC1_nolim)
+```
+
+##### Model validation
+```{r modelval2, echo=FALSE}
+print("1. Normality of residuals:")
+qqnorm(residuals(m_PC1_nolim)); qqline(residuals(m_PC1_nolim))
+shapiro.test(residuals(m_PC1_nolim))
+
+print("2. Homocedasticity:")
+plot(fitted(m_PC1_nolim), residuals(m_PC1_nolim))
+abline(h=0, lty=2)
+#Test de Breusch–Pagan:
+bptest(m_PC1_nolim)
+
+print("3. Independency of residuals:")
+dwtest(m_PC1_nolim)
+
+print("4. Influence/leverage. Cook's disance:")
+plot(cooks.distance(m_PC1_nolim), type="h")
+which(cooks.distance(m_PC1_nolim) > 4/(nrow(x)-length(coef(m_PC1_nolim))))
+```
+
+
+#### Parsimonious OLS model (Model 3, n=22):
+```{r model3, echo=FALSE}
+m_simple <- lm(PC1 ~ Period, data = x)
+summary(m_simple)
+
+print("AIC Model 1 vs Model 3:")
+AIC(m_simple, m_PC1)
+```
+##### Model validation
+```{r modelval3, echo=FALSE}
+print("1. Normality of residuals:")
+qqnorm(residuals(m_simple)); qqline(residuals(m_simple))
+shapiro.test(residuals(m_simple))
+
+print("2. Homocedasticity:")
+plot(fitted(m_simple), residuals(m_simple))
+abline(h=0, lty=2)
+#Test de Breusch–Pagan:
+bptest(m_simple)
+
+print("3. Independency of residuals:")
+dwtest(m_simple)
+```
+
+
+#### Robust OLS model (Model 4, n=22):
+```{r model4, echo=FALSE}
+library(MASS)
+m_robust <- rlm(PC1 ~ Period + Site_context + log_hearths + Functionality_bi, data = x)
+summary(m_robust)
+```
+##### Model validation
+
+```{r modelval4, echo=FALSE}
+print("1. Normality of residuals:")
+qqnorm(residuals(m_robust)); qqline(residuals(m_robust))
+shapiro.test(residuals(m_robust))
+
+print("2. Homocedasticity:")
+plot(fitted(m_robust), residuals(m_robust))
+abline(h=0, lty=2)
+#Test de Breusch–Pagan:
+bptest(m_robust)
+
+print("3. Independency of residuals:")
+dwtest(m_robust)
+```
+
+#### Checking the robustness of period coefficient
+
+```{r robustness, echo=FALSE}
+boot_coef <- function(data, indices) {
+  d <- data[indices, ]
+  return(coef(lm(PC1 ~ Period, data = d))["PeriodUP"])
+}
+
+set.seed(123)   
+bstrap <- boot(
+  data      = x,
+  statistic = boot_coef,
+  R         = 2000
+)
+
+print(bstrap)
+
+
+boot_ci <- boot.ci(bstrap, type = "perc")
+print(boot_ci)
+
+hist(bstrap$t, 
+     breaks = 30, 
+     main   = "Bootstrap distribution of PeriodUP coef",
+     xlab   = "Coefficient value",
+     border = "white")
+abline(v = quantile(bstrap$t, c(0.025, 0.975)), col = "red", lwd = 2, lty = 2)
+abline(v = bstrap$t0, col = "blue", lwd = 2)
+```
+
+### Model with PC2
+
+#### Full OLS model (n=22):
+```{r PC2model1, echo=FALSE}
+m_PC2 <- lm(PC2 ~ Period + Site_context + log_hearths + Functionality_bi, data = x)
+summary(m_PC2)
+```
+##### Model validation
+```{r PC2modelval1, echo=FALSE}
+print("1. Normality of residuals:")
+qqnorm(residuals(m_PC2)); qqline(residuals(m_PC2))
+shapiro.test(residuals(m_PC2))
+
+print("2. Homocedasticity:")
+plot(fitted(m_PC2), residuals(m_PC2))
+abline(h=0, lty=2)
+#Test de Breusch–Pagan:
+library(lmtest)
+bptest(m_PC2)
+
+print("3. Independency of residuals:")
+dwtest(m_PC2)
+
+print("4. Influence/leverage. Cook's disance:")
+plot(cooks.distance(m_PC2), type="h")
+which(cooks.distance(m_PC2) > 4/(nrow(x)-length(coef(m_PC2))))#Señala los casos influyentes.
+hatvalues(m_PC2)[19]
+hatvalues(m_PC2)[13]
+```
+
+#### Full OLS model without El Salt and Molodova (n=20):
+```{r PC2model2, echo=FALSE}
+m_PC2_nolim <- lm(PC2 ~ Period + Site_context + log_hearths + Functionality_bi,data = x[-13,-19, ])
+summary(m_PC2_nolim)
+
+AIC(m_PC2, m_PC2_nolim)
+```
+
+
+### Figure 4
+Chronological sequence of clustering metrics. A) PC1 scores, B) Cluster strength. C) Parent intensity kappa.  
+
+```{r fig4, echo=FALSE}
+ggplot(x, aes(x = Chronology_ka, y = PC1, color = Period)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "loess", se = FALSE, linetype = "dashed", color = "grey40") +
+  geom_text_repel(aes(label = Site), size = 3, color = "black", max.overlaps = Inf) +
+  scale_x_reverse() +
+  labs(x = "Chronology (ka)", y = "PC1") +
+  theme_minimal()
+
+ggplot(x, aes(x = Chronology_ka, y =Clust_strength, color = Period)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "loess", se = FALSE, linetype = "dashed", color = "grey40") +
+  geom_text_repel(aes(label = Site), size = 3, color = "black", max.overlaps = Inf) +
+  scale_x_reverse() +
+  labs(x = "Chronology (ka)", y = "Cluster strength") +
+  theme_minimal()
+
+ggplot(x, aes(x = Chronology_ka, y =Kappa, color = Period)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "loess", se = FALSE, linetype = "dashed", color = "grey40") +
+  geom_text_repel(aes(label = Site), size = 3, color = "black", max.overlaps = Inf) +
+  scale_x_reverse() +
+  labs(x = "Chronology (ka)", y = "Parent intensity") +
+  theme_minimal()
+
+```

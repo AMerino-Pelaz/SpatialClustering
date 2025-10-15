@@ -1,0 +1,125 @@
+---
+title: "ClusterModels"
+output: html_document
+date: "2025-06-23"
+authors: Amanda Merino-Pelaz, Lucía Cobo-Sánchez
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Open site plans
+In order to open the data and create a spatial point pattern (spp) for modelling, change beforehand the initial variables "site" and "window" to select the site. In addition to this, you can change the directory where data is stored in setwd function. The following lines open the data in shapefile format, and creates a spp to model.
+
+
+```{r sites, echo=FALSE}
+
+library(spatstat)
+library(sf)
+library(sp)
+library(spatstat.geom)
+
+dsn <- "C:/Users/amand/Desktop/Tesis/AHEAD congress/Sites"
+site <- "CovaGran"
+window <- "CovaGran_w"
+
+site <- st_read(dsn = dsn, layer = site)#Read remains shapefile
+window <- st_read(dsn = dsn, layer = window) #Read window shapefile
+
+#Extract window
+window_xy <- st_zm(window)
+window_owin <- as.owin(window_xy)
+
+# Extract remain coordinates
+coords <- st_coordinates(site)
+
+# Build ppp
+overall <- ppp(x = coords[,1], y = coords[,2], window = window_owin)
+overall<-unmark(overall)
+unitname(overall)<-c("metre","metres")
+summary(overall)
+plot(overall,pch=".",cex=3,main="overall")
+
+```
+
+## Cluster modelling
+Cluster modelling with a Thomas process. The fitting method used is minimum contrast with K-function. The model returns the four main parameters used for analyses: cluster strength 𝜑,  sibling probability 𝘱, scale of the clusters 𝑠, and  parent intensity per area 𝜅. The model returns the parameter mean cluster size 𝜇 as a pixel image, thus the mean is calculated.
+
+The summary function returns the entire report, which includes additional parameters like overdispersion index 𝜔, spatial persistence index 𝑣 and total variation bound 𝑏. This parameters can be found at the end of the report.
+
+### Clustering parameters:
+
+```{r models1, echo=FALSE}
+mod1<-kppm(overall~x*y, "Thomas", penalised=TRUE, method="mincon", statistic="K")
+mod1
+print("Mean cluster size 𝜇:")
+mean(mod1$mu)
+print("Model report")
+summary(mod1)
+```
+
+
+### Models validation
+The models are validated by means of Monte Carlo test with envelopes of L-functions (39 simulations) and maximum absolute deviation (MAD) test (39 simulations).
+
+#### Monte Carlo test with envelopes:
+```{r validation1, echo=FALSE}
+val1<-envelope(mod1, Lest, nsim=39)
+plot(val1, lwd=3,cex.axis=1.5, cex.main=1.5,main="Monte Carlo test L-function")
+
+```
+
+#### MAD test:
+```{r validation1, echo=FALSE}
+val12<-mad.test(mod1, Lest, nsim=39)
+val12
+```
+
+
+## Testing other fitting methods
+In order to test the consistency of the fitted model, other fitting methods can be tested. Currently there are four fitting methods available: minimum contrast with K-function, minimum contrast with pair correlation function (g), second order composite likelihood and Palm likelihood.
+
+The following loop models all patterns using all fitting methods:
+```{r loop, echo=FALSE}
+#The following loop models all patterns using all fitting methods:
+methods<-c("mincon_K", "mincon_pcf", "clik2", "palm")
+model_list<-list()
+for (method in methods) {
+    model_name<-paste0("mod_", method)
+    if (grepl("mincon_K",method)) {
+      fit_method<-"mincon"
+      statistic<-"K"
+    } else if (grepl("mincon_pcf", method)) {
+      fit_method<-"mincon"
+      statistic<-"pcf"
+    } else {
+      fit_method<-method
+      statistic<-NULL
+    }
+    cat("Fitting model:", model_name, "\n")
+    model_list[[model_name]]<-kppm(overall ~ x * y, "Thomas", penalised = TRUE, method = fit_method, statistic = statistic)
+    cat("\n")
+}
+cat("Model fitting process completed.\n")
+```
+
+### Minimum contrast K function
+```{r models4, echo=FALSE}
+model_list$mod_mincon_K
+```
+
+### Minimum contrast with pair correlation function (g)
+```{r models4, echo=FALSE}
+model_list$mod_mincon_pcf
+```
+
+### Second order composite likelihood
+```{r models4, echo=FALSE}
+model_list$mod_clik2
+```
+
+### Palm likelihood
+```{r models4, echo=FALSE}
+model_list$mod_palm
+```
