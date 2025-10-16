@@ -38,6 +38,5 @@ pak::pak("AMerino-Pelaz/SpatialClustering")
 
 If you use this repository or its code in your work, please cite:
 
-Merino-Pelaz, A., Cobo-Sánchez, L. (in review). Comparative Multivariate Analysis of Spatial Clustering in Neanderthal and Anatomically Modern Human Occupations.
-
+[dataset] Merino-Pelaz, A., Cobo-Sánchez, L., 2025. Dataset associated with: “Comparative Multivariate Analysis of Spatial Clustering in Neanderthal and Anatomically Modern Human Occupations”. OSF. https://doi.org/10.17605/OSF.IO/ZH5BK
 
