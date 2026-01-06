@@ -20,12 +20,8 @@ library(sf)
 library(sp)
 library(spatstat.geom)
 
-dsn <- "C:/Users/amand/Desktop/Tesis/AHEAD congress/Sites"
-site <- "CovaGran"
-window <- "CovaGran_w"
-
-site <- st_read(dsn = dsn, layer = site)#Read remains shapefile
-window <- st_read(dsn = dsn, layer = window) #Read window shapefile
+site <- st_read(dsn = file.choose())#Read remains shapefile
+window <- st_read(dsn = file.choose())#Read window shapefile
 
 #Extract window
 window_xy <- st_zm(window)
@@ -123,3 +119,57 @@ model_list$mod_clik2
 ```{r models4, echo=FALSE}
 model_list$mod_palm
 ```
+
+## Sensitivity analysis
+To test the effect of area in clustering parameters estimations, we reduced 15% the excavated area and refitted the Thomas cluster models to check the variations in metrics. The effect was minimal, with an overall tendency to reduce cluster strength and sibling probability estimations.
+
+
+```{r sites, echo=FALSE}
+sites   <- c("Cuzoul", "AbricRomani_Oa", "ElSalt", "Etiolles_Locus1", "Oscurusciuto_SU14", "WallertheimA")
+windows <- c("Cuzoul_w", "AbricRomani_Oa_w", "ElSalt_w", "Etiolles_Locus1_w", "Oscurusciuto_SU14_w", "WallertheimA_w")
+dsn="C:/Users/amand/Desktop/TESIS_DOCTORAL/DATA/Sites_PAPER1"
+
+reduced_area_models <- function(site_layer, window_layer, dsn) {
+
+  site   <- st_read(dsn = dsn, layer = site_layer, quiet = TRUE)
+  window <- st_read(dsn = dsn, layer = window_layer, quiet = TRUE)
+
+  window_xy   <- st_zm(window)
+  window_owin <- as.owin(window_xy)
+
+  coords <- st_coordinates(site)
+
+  overall <- ppp(x = coords[,1], y = coords[,2], window = window_owin)
+  overall <- overall[overall$window]
+  overall <- unmark(overall)
+  unitname(overall) <- c("metre", "metres")
+
+  win_small <- scalardilate(window_owin, f = 0.85, origin = "centroid")
+
+  reduced <- ppp(x = coords[,1], y = coords[,2], window = win_small)
+  reduced <- unmark(reduced)
+  unitname(reduced) <- c("metre", "metres")
+
+  model_red  <- kppm(reduced ~ x * y, "Thomas", penalised = TRUE,
+                     method = "mincon", statistic = "K")
+
+  model_orig <- kppm(overall  ~ x * y, "Thomas", penalised = TRUE,
+                     method = "mincon", statistic = "K")
+
+  list(
+    site       = site_layer,
+    model_orig = model_orig,
+    model_red  = model_red
+  )
+}
+
+m <- mapply(
+  reduced_area_models,
+  site_layer   = sites,
+  window_layer = windows,
+  MoreArgs     = list(dsn = dsn),
+  SIMPLIFY     = FALSE
+)
+
+```
+
